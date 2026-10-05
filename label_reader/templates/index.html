@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="bench">
+  <section class="panel" aria-labelledby="photo-h">
+    <h2 id="photo-h">Nameplate photo</h2>
+
+    <div class="plate{% if result %} has-image{% endif %}">
+      <i class="screw tl"></i><i class="screw tr"></i><i class="screw bl"></i><i class="screw br"></i>
+      {% if result %}
+        <img src="{{ result.image }}" alt="Uploaded nameplate">
+      {% else %}
+        <div class="empty">
+          <p class="big">No photo yet</p>
+          <p>Choose a JPEG or PNG of the nameplate below.</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <form class="upload" action="{{ url_for('read_page') }}" method="post" enctype="multipart/form-data">
+      <label for="image" class="sr">Nameplate photo</label>
+      <input id="image" name="image" type="file" accept="image/*" required>
+      <button class="btn primary" type="submit">Read label</button>
+    </form>
+
+    <script>
+      (function () {
+        var input   = document.getElementById('image');
+        var plate   = document.querySelector('.plate');
+        var empty   = plate ? plate.querySelector('.empty') : null;
+        var preview = plate ? plate.querySelector('img') : null;
+
+        if (!input || !plate) return;
+
+        input.addEventListener('change', function () {
+          var file = input.files && input.files[0];
+          if (!file) return;
+
+          var reader = new FileReader();
+          reader.onload = function (e) {
+            // Remove the "No photo yet" placeholder
+            if (empty) { empty.style.display = 'none'; }
+
+            // Reuse existing <img> or create one
+            if (!preview) {
+              preview = document.createElement('img');
+              preview.alt = 'Selected nameplate photo';
+              plate.appendChild(preview);
+            }
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+            plate.classList.add('has-image');
+          };
+          reader.readAsDataURL(file);
+        });
+      })();
+    </script>
+
+    <form class="samples" action="{{ url_for('read_page') }}" method="post">
+      <span>No photo handy? Try a sample:</span>
+      {% for key, name in samples.items() %}
+        <button class="chip" type="submit" name="sample" value="{{ key }}">{{ name }}</button>
+      {% endfor %}
+    </form>
+  </section>
+
+  <section class="panel" aria-labelledby="fields-h">
+    <div class="result-head">
+      <h2 id="fields-h">Details read from the label</h2>
+      {% if result %}<span class="count">{{ result.found }} of {{ result.total }} found</span>{% endif %}
+    </div>
+
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+    {% if result %}
+      <form method="post" class="fields">
+        {% for key, value in result.fields.items() %}
+          <div class="row{% if not value %} missing{% endif %}">
+            <label for="f_{{ key }}">{{ labels.get(key, key.replace('_', ' ')) }}</label>
+            <input id="f_{{ key }}" name="f_{{ key }}" type="text"
+                   value="{{ value or '' }}" placeholder="Not found. Type it in.">
+          </div>
+        {% endfor %}
+        <div class="actions">
+          <button class="btn primary" type="submit" formaction="{{ url_for('export_json') }}">Download JSON</button>
+          <button class="btn" type="submit" formaction="{{ url_for('export_csv') }}">Download CSV</button>
+          <a class="btn quiet" href="{{ url_for('index') }}">Start over</a>
+        </div>
+      </form>
+
+      {% if result.raw_text %}
+      <details class="raw">
+        <summary>Show the text the reader saw</summary>
+        <pre id="raw-text-content">{{ result.raw_text }}</pre>
+      </details>
+      {% endif %}
+
+      <!-- ── AI Equipment Assistant Chatbot ── -->
+      <div class="chat-section">
+        <h3 class="chat-title">💬 Ask AI Assistant about this label</h3>
+        <p class="chat-sub">Ask questions about maintenance, operating voltage, installation standards, or specs.</p>
+        
+        <div class="chat-chips">
+          <button type="button" class="chat-chip" onclick="askQuestion('Summarize the main technical specs and safety guidelines for this equipment.')">📋 Summarize specs & safety</button>
+          <button type="button" class="chat-chip" onclick="askQuestion('What voltage and frequency standards does this unit operate on?')">⚡ Operating standards</button>
+          <button type="button" class="chat-chip" onclick="askQuestion('What routine maintenance and inspection checklist should I follow?')">🛠️ Maintenance checklist</button>
+        </div>
+
+        <div id="chat-messages" class="chat-messages">
+          <div class="chat-msg bot">
+            <span class="chat-sender">AI Assistant</span>
+            <div class="chat-text">Hello! I've loaded the label specifications. Ask me any question regarding this equipment, its rating, maintenance, or standards.</div>
+          </div>
+        </div>
+
+        <form id="chat-form" class="chat-form" onsubmit="handleChatSubmit(event)">
+          <input type="text" id="chat-input" placeholder="Ask a question about this equipment..." required autocomplete="off">
+          <button type="submit" class="btn primary">Ask AI</button>
+        </form>
+      </div>
+
+      <script>
+        function getFields() {
+          var fields = {};
+          var inputs = document.querySelectorAll('input[name^="f_"]');
+          inputs.forEach(function(input) {
+            var key = input.name.replace('f_', '');
+            fields[key] = input.value.trim();
+          });
+          return fields;
+        }
+
+        function appendMessage(sender, text, isUser) {
+          var container = document.getElementById('chat-messages');
+          var msgDiv = document.createElement('div');
+          msgDiv.className = 'chat-msg ' + (isUser ? 'user' : 'bot');
+          
+          var senderSpan = document.createElement('span');
+          senderSpan.className = 'chat-sender';
+          senderSpan.textContent = sender;
+          
+          var textDiv = document.createElement('div');
+          textDiv.className = 'chat-text';
+          textDiv.innerHTML = text.replace(/\n/g, '<br>');
+
+          msgDiv.appendChild(senderSpan);
+          msgDiv.appendChild(textDiv);
+          container.appendChild(msgDiv);
+          container.scrollTop = container.scrollHeight;
+          return msgDiv;
+        }
+
+        function askQuestion(qText) {
+          document.getElementById('chat-input').value = qText;
+          handleChatSubmit();
+        }
+
+        function handleChatSubmit(e) {
+          if (e) e.preventDefault();
+          var input = document.getElementById('chat-input');
+          var message = input.value.trim();
+          if (!message) return;
+
+          appendMessage('You', message, true);
+          input.value = '';
+
+          var rawElem = document.getElementById('raw-text-content');
+          var rawText = rawElem ? rawElem.textContent : '';
+
+          var loadingMsg = appendMessage('AI Assistant', 'Thinking...', false);
+
+          fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: message,
+              fields: getFields(),
+              raw_text: rawText
+            })
+          })
+          .then(function(res) { return res.json(); })
+          .then(function(data) {
+            if (data.reply) {
+              loadingMsg.querySelector('.chat-text').innerHTML = data.reply.replace(/\n/g, '<br>');
+            } else {
+              loadingMsg.querySelector('.chat-text').textContent = data.error || 'Failed to get answer.';
+            }
+          })
+          .catch(function(err) {
+            loadingMsg.querySelector('.chat-text').textContent = 'Error contacting chat API.';
+          });
+        }
+      </script>
+    {% elif not error %}
+      <p class="idle">Nothing read yet. Add a photo and the fields will appear here.</p>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

@@ -1,0 +1,7 @@
+flask>=3.0
+pillow>=10.0
+pytesseract>=0.3.10
+opencv-python-headless>=4.9
+numpy>=1.26
+openai>=1.40        # only needed when EXTRACTOR=azure
+python-dotenv>=1.0

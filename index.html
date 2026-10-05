@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="bench">
+  <section class="panel" aria-labelledby="photo-h">
+    <h2 id="photo-h">Nameplate photo</h2>
+
+    <div class="plate{% if result %} has-image{% endif %}">
+      <i class="screw tl"></i><i class="screw tr"></i><i class="screw bl"></i><i class="screw br"></i>
+      {% if result %}
+        <img src="{{ result.image }}" alt="Uploaded nameplate">
+      {% else %}
+        <div class="empty">
+          <p class="big">No photo yet</p>
+          <p>Choose a JPEG or PNG of the nameplate below.</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <form class="upload" action="{{ url_for('read_page') }}" method="post" enctype="multipart/form-data">
+      <label for="image" class="sr">Nameplate photo</label>
+      <input id="image" name="image" type="file" accept="image/jpeg,image/png" required>
+      <button class="btn primary" type="submit">Read label</button>
+    </form>
+
+    <form class="samples" action="{{ url_for('read_page') }}" method="post">
+      <span>No photo handy? Try a sample:</span>
+      {% for key, name in samples.items() %}
+        <button class="chip" type="submit" name="sample" value="{{ key }}">{{ name }}</button>
+      {% endfor %}
+    </form>
+  </section>
+
+  <section class="panel" aria-labelledby="fields-h">
+    <div class="result-head">
+      <h2 id="fields-h">Details read from the label</h2>
+      {% if result %}<span class="count">{{ result.found }} of {{ result.total }} found</span>{% endif %}
+    </div>
+
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+    {% if result %}
+      <form method="post" class="fields">
+        {% for key, value in result.fields.items() %}
+          <div class="row{% if not value %} missing{% endif %}">
+            <label for="f_{{ key }}">{{ labels.get(key, key.replace('_', ' ')) }}</label>
+            <input id="f_{{ key }}" name="f_{{ key }}" type="text"
+                   value="{{ value or '' }}" placeholder="Not found. Type it in.">
+          </div>
+        {% endfor %}
+        <div class="actions">
+          <button class="btn primary" type="submit" formaction="{{ url_for('export_json') }}">Download JSON</button>
+          <button class="btn" type="submit" formaction="{{ url_for('export_csv') }}">Download CSV</button>
+          <a class="btn quiet" href="{{ url_for('index') }}">Start over</a>
+        </div>
+      </form>
+
+      {% if result.raw_text %}
+      <details class="raw">
+        <summary>Show the text the reader saw</summary>
+        <pre>{{ result.raw_text }}</pre>
+      </details>
+      {% endif %}
+    {% elif not error %}
+      <p class="idle">Nothing read yet. Add a photo and the fields will appear here.</p>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}
